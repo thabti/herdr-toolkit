@@ -9,6 +9,7 @@ User docs live in `docs/GUIDE.md`. Its §11 "How it is built" covers the file ma
 - **Land on `main`.** Commit straight to `main` and push. Don't open feature branches or PRs unless asked.
 - **Keep this file current.** Every change that adds a feature, setting, convention or gotcha updates this file in the same commit.
 - **Docs move with code.** A user-visible change also updates `docs/GUIDE.md` (feature section plus the settings table) and the README's "What you get" list when it's a headline feature.
+- **Screenshots** live in `docs/images/` (the README's tab bar shot is `tab-bar.png`). Retina captures are 2x, so set `width` to half the pixel width.
 - After a change: run `scripts/install.sh`. It syncs shared files, copies the mods into `~/.config/herdr-app`, and runs `herdr-app check` on each one. Herdr hot-reloads the mods.
 - To force a reload: `herdr-app do layout.switch --name sab`. Check the result with `herdr-app status` (`"errors": []`) and `herdr-app shot <png>`. Never restart the user's app or `hc`.
 
