@@ -50,7 +50,7 @@
               },
               "min": 90,
               "content": {
-                "mod": "spaces"
+                "mod": "sab-spaces"
               }
             },
             {
@@ -184,6 +184,16 @@
                         "mod": "sab-panel",
                         "props": {
                           "panel": "issues"
+                        }
+                      }
+                    },
+                    {
+                      "id": "memory",
+                      "type": "block",
+                      "content": {
+                        "mod": "sab-panel",
+                        "props": {
+                          "panel": "memory"
                         }
                       }
                     },

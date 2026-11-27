@@ -7,7 +7,7 @@
 import { div, svg } from "gpui-kit";
 import { EditorState, TextView, Button, Popover, v_flex, h_flex } from "gpui-base";
 import { spaces, panes, focused, layout, run, theme, settings, exec, knownAgents, notify, shared, setShared, openOverlay } from "herdr";
-import { cfg, setSetting, jiraKeys, jiraUrl, linkJira } from "./config.js";
+import { cfg, setSetting, jiraKeys, jiraUrl, linkJira, withPin } from "./config.js";
 import { ghLogins, switchGhAccount, addGhAccount, ACCOUNTS } from "./gh.js";
 export { ghLogins, switchGhAccount, addGhAccount } from "./gh.js";
 export { cfg, prompt, jiraKey, jiraKeys, jiraUrl, linkJira } from "./config.js";
@@ -47,11 +47,13 @@ export function insideRoot(path) {
 
 // Where the focused pane is: its folder, the machine it is on (null: this
 // computer) and its space. The panel follows the session you are looking at.
+// A space pinned to a repository (spaces.repos) shows it while its pane sits
+// in a folder that holds it, such as ~ (withPin).
 export function location() {
   const space = spaces().find((s) => s.active), f = focused();
   const pane = f?.pane ? panes().find((p) => p.pane === f.pane) : null;
   const on = f?.pane === null ? (f.terminal?.includes("/") ? f.terminal.split("/")[0] : null) : space?.machine ?? null;
-  return { cwd: pane?.cwd || f?.cwd || space?.folder, on, space: space?.id };
+  return { cwd: withPin(pane?.cwd || f?.cwd || space?.folder, space), on, space: space?.id };
 }
 // The context a read belongs to: the folder and the machine (not the space).
 export const key = () => { const { cwd, on } = location(); return JSON.stringify({ cwd, on }); };

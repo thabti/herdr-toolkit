@@ -1,6 +1,6 @@
 # herdr-toolkit
 
-A layout plus five mods for the Herdr desktop app (plain ES modules, no build step).
+A layout plus six mods for the Herdr desktop app (plain ES modules, no build step).
 Formerly herdr-sab. Internal ids keep the `sab` prefix (layout `sab`, mods `sab-*`, `sab.json`, `layout:sab` keys, the `.herdr-sab` install marker); don't rename them, it breaks existing installs. Only user-visible text says herdr-toolkit.
 User docs live in `docs/GUIDE.md`. Its §11 "How it is built" covers the file map and design notes.
 
@@ -15,7 +15,7 @@ User docs live in `docs/GUIDE.md`. Its §11 "How it is built" covers the file ma
 
 ## Code rules
 
-- **Shared code.** Herdr mods can't import each other. Edit `sab/shared/*.js` only, then run `scripts/sync-shared.sh`, which copies it into `sab-tabs`, `sab-panel` and `sab-settings`. Never edit the copies.
+- **Shared code.** Herdr mods can't import each other. Edit `sab/shared/*.js` only, then run `scripts/sync-shared.sh`, which copies it into `sab-tabs`, `sab-panel`, `sab-settings`, `sab-spaces` and `sab-open-with`. Never edit the copies.
 - **Settings.**
   - A new setting gets a default in `DEFAULTS` (`sab/shared/config.js`) with a comment.
   - Add a control in `sab/mods/sab-settings/main.js` (`toggle` / `stepper` / `choice` / `chips`) and a row in the GUIDE settings table.
@@ -52,6 +52,26 @@ User docs live in `docs/GUIDE.md`. Its §11 "How it is built" covers the file ma
   - Pushes the branch (`-u origin HEAD` on the first push), then runs `gh pr create --fill [--draft] --head <branch>`.
   - It returns `{ url, existed }`.
   - The button shows only when the branch isn't `defaultBranch()` and `ahead > 0`.
+
+## Spaces sidebar (`sab-spaces`)
+
+- `list.js` is Herdr's shipped `spaces` mod (0.1.13), cloned. The layout's `spaces` block points at `sab-spaces`. Keep the clone's changes marked `herdr-toolkit:` so a newer Herdr version can be merged in.
+- `pinOf` and `withPin(cwd, space)` live in `shared/config.js`. `withPin` returns the pin when the pane's folder is empty, the pin itself or one of its parents (`~`), else the pane's folder. Every "where is the pane" resolver uses it: `location()` in `sab-panel/lib.js`, `paneFolder` in sab-tabs and `resolveTarget` in sab-open-with.
+- A space's repository is `pinOf(s)` (`spaces.repos[space id]`, local spaces only), else its first terminal's folder. `where()` uses it, so pins drive the git look and the nesting.
+- `check()` also runs `git worktree list --porcelain` per place and keeps it in `this.trees[repo]`. `ordered()` adds rows `{ free, on, main, parent }` for checkouts no space shows. These rows are never part of the `space.move` ordering.
+- The same mod draws its popups through `props.view`: `menu`, `worktree-menu`, `repo` and `remove` (`menus.js`). New and Open worktree reuse Herdr's `worktree` dialog with `{ folder, machine, action }`. Remove is ours, because Herdr's needs a space to close.
+- Opening a checkout goes through the `start` view (`startPicker`): Terminal or an installed agent (`knownAgents`, with Herdr new-menu's cached `new-menu.agents` shown first). It then runs `space.new { folder, machine, argv, tab }`, or passes `{ argv, tab }` to Herdr's New worktree dialog. The last choice is shared `sab.spaces.start`. Always pass `machine: ""` for this computer: a click with no machine means the focused space's machine.
+- **Rename** opens Herdr's `prompt` mod itself (`renameDialog`) with `value: s.name`, because `space.rename` with no name leaves the field empty for an unnamed space. `Shift-F2` is still Herdr's own and stays empty.
+- `mod.open` can't pass props, so the popups can't be opened from the CLI. Test them with the Node stubs below.
+
+## Memory panel, sidebar context, Jira titles
+
+- **Off by default.** `panels.memory`, `context.spaces`, `jira.titles` and `spaces.worktrees` default to false, so a fresh install behaves as before these features until they are turned on. With `spaces.worktrees` off, `sab-spaces` lists no free worktrees and its right-click opens Herdr's `menu` mod, not `menus.js`.
+
+- **Memory** (`sab-panel/memory.js`): CLAUDE.md / CLAUDE.local.md / .claude/CLAUDE.md in the pane's folder and every parent, the repo's and `~/.claude` rules, and auto memory at `~/.claude/projects/<path with [^A-Za-z0-9] → ->/memory`. Worktrees have no memory folder of their own: it tries the main checkout (`--git-common-dir`), then the repo top, then the folder. Local only.
+- **Sidebar context:** sab-tabs publishes each Claude pane's reading as shared `CONTEXT_KEY` (`sab.context.panes`, `{ pane: { pct, at, size, model } }`) every 3 s. `list.js` `contextChip` takes the max per space. Setting `context.spaces`.
+- **Jira titles** (`shared/jira.js`): `jiraTitle(key)` is safe to call while drawing: it only reads shared `sab.jira.titles` and queues the key. `fetchJiraTitles()` runs from timers (sab-tabs every 3 s with `tell`/`persist`; sab-spaces every 3 s). curl reads the login from `jira.netrc` (`--netrc-file`), never argv. Settings `jira.titles`, `jira.netrc`, `jira.tabTitle`, `jira.refreshMinutes`.
+- **Export settings…** (`exportSettings` in sab-settings): `pickFolder`, then `writeTextFile(…, null)` of `diff(DEFAULTS, cfg())` to `herdr-toolkit-settings.json`; when that exists, the name gets a timestamp. Then `open -R`.
 
 ## Testing without the app
 

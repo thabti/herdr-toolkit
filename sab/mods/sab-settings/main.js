@@ -10,8 +10,8 @@
 // every ~3 s). Task prompts live only in the file (`prompts`).
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, Scrollbar, Input, InputState } from "gpui-base";
-import { theme, props, closeOverlay, openOverlay, knownAgents, appHome, writeTextFile, readTextFile, notify, home, run } from "herdr";
-import { cfg, get, setSetting, resetSettings, DEFAULTS, SETTINGS_FILE } from "./config.js";
+import { theme, props, closeOverlay, openOverlay, knownAgents, appHome, writeTextFile, readTextFile, notify, home, run, pickFolder, exec } from "herdr";
+import { cfg, get, setSetting, resetSettings, diff, DEFAULTS, SETTINGS_FILE } from "./config.js";
 import { ghLogins, switchGhAccount, addGhAccount } from "./gh.js";
 
 const ICON = "mods/sab-panel/icons/";
@@ -30,6 +30,7 @@ const LISTS = {
   "gcloud.loginArgs": { split: (v) => v.trim().split(/\s+/).filter(Boolean), join: (a) => a.join(" "), placeholder: "auth login" },
   "jira.projects": { split: (v) => v.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean), join: (a) => (a ?? []).join(", "), placeholder: "DS, WEB (empty: any)" },
   "jira.baseUrl": { split: (v) => v.trim(), join: (v) => v ?? "", placeholder: "https://your-site.atlassian.net", empty: "" },
+  "jira.netrc": { split: (v) => v.trim(), join: (v) => v ?? "", placeholder: "~/.config/herdr-app/jira.netrc", empty: "" },
   // owner/name=login pairs; the panels' account menu writes these too.
   "github.repos": {
     split: (v) => Object.fromEntries(v.split(/[,\n]/).map((s) => s.split("=").map((x) => x.trim())).filter(([o, l]) => o.includes("/") && l)),
@@ -85,6 +86,27 @@ export default class Settings extends View {
     if ((await readTextFile(path).catch(() => null)) === null) await writeTextFile(path, "{}\n", null).catch(() => {});
     this.close();
     openOverlay({ mod: "sab-open-with", kind: "popup", at: "top", width: 380, props: { file: path, folder: appHome() } });
+  }
+
+  // Writes the settings (what differs from the defaults, as sab.json holds them)
+  // to herdr-toolkit-settings.json in a folder you pick, then shows it in
+  // Finder. A file already there is kept: the new one gets the date and time.
+  // To use it elsewhere, copy it over ~/.config/herdr-app/sab.json.
+  async exportSettings() {
+    const folder = await pickFolder({ prompt: "Export here" }).catch(() => null);
+    if (!folder) return;
+    const text = JSON.stringify(diff(DEFAULTS, cfg()) ?? {}, null, 2) + "\n";
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "-");
+    for (const name of ["herdr-toolkit-settings.json", `herdr-toolkit-settings-${stamp}.json`]) {
+      const path = `${folder.replace(/\/+$/, "")}/${name}`;
+      try {
+        await writeTextFile(path, text, null);
+        notify({ title: "Settings exported", body: path });
+        exec("open", ["-R", path]).catch(() => {});
+        return;
+      } catch {}
+    }
+    notify({ title: "Could not export the settings", body: `Nothing was written to ${folder}.`, level: "error" });
   }
 
   // ---- pieces, as Herdr's Settings draws them ----
@@ -177,6 +199,9 @@ export default class Settings extends View {
       .child(this.heading(t, "Jira"))
       .child(this.text(t, "jira.baseUrl", "Jira site", "Every DS-1234 shown (tabs, pull requests, comments, issues, Markdown) links to <site>/browse/DS-1234. ⌘⌥J opens the tab's."))
       .child(this.text(t, "jira.projects", "Projects", "Only these keys count, so UTF-8 and the like never do; lowercase ds-1234 in branch names counts too. Empty: any upper-case key."))
+      .child(this.toggle(t, "jira.titles", "Ticket titles", "Fetch each ticket's title from Jira, for tab tooltips and the spaces sidebar. Needs the site and a login file.", !c.jira.baseUrl))
+      .child(this.text(t, "jira.netrc", "Login file", "A netrc file: machine <site> login <email> password <Atlassian API token>. Keep it private (chmod 600).", !c.jira.baseUrl || !c.jira.titles))
+      .child(this.toggle(t, "jira.tabTitle", "Title in the tab's name", "An unnamed tab reads \"DS-1234 · Fix cart login\", not just the key", !c.jira.baseUrl || !c.jira.titles))
       .child(div().h(18))
       .child(this.heading(t, "Buttons"))
       .child(this.toggle(t, "tabs.finderButton", "Open in Finder", "The focused pane's folder"))
@@ -188,13 +213,16 @@ export default class Settings extends View {
     const pr = !c.panels.pr;
     return v_flex().w_full()
       .child(this.heading(t, "In the tab bar"))
-      .child(this.chips(t, "Panels", "GitHub panels read with gh only while shown", [["panels.files", "Files"], ["panels.changes", "Changes"], ["panels.pr", "Pull requests"], ["panels.issues", "Issues"]]))
+      .child(this.chips(t, "Panels", "GitHub panels read with gh only while shown", [["panels.files", "Files"], ["panels.changes", "Changes"], ["panels.pr", "Pull requests"], ["panels.issues", "Issues"], ["panels.memory", "Memory"]]))
       .child(this.toggle(t, "changes.commit", "Commit from Changes", "The message field and Commit button", !c.panels.changes))
       .child(this.toggle(t, "changes.createPr", "Create PR from Changes", "Beside Commit, on a branch with commits its base doesn't have: pushes it and runs gh pr create --fill", !c.panels.changes))
       .child(this.toggle(t, "pr.createDraft", "Create pull requests as drafts", "Create PR in the Changes and PR panels", !c.panels.changes && !c.panels.pr))
       .child(this.toggle(t, "changes.worktrees", "Worktrees", "A repository with linked worktrees (git worktree, Claude Code's .claude/worktrees) shows each one's changes in its own section", !c.panels.changes))
       .child(this.toggle(t, "changes.nested", "Repositories in subfolders", "A folder that is not a repository shows the changes of each one inside it, with a filter per repository", !c.panels.changes))
       .child(this.stepper(t, "changes.scanDepth", "Look for them", "Folders deep, below the pane's folder", { min: 1, max: 5, step: 1, unit: " deep", disabled: !c.panels.changes || !c.changes.nested }))
+      .child(div().h(18))
+      .child(this.heading(t, "Spaces sidebar"))
+      .child(this.toggle(t, "spaces.worktrees", "Worktrees under their space", "Every worktree of a space's repository, also those no space is open on. Right-click a space to pin its repository, or to make and remove worktrees."))
       .child(div().h(18))
       .child(this.heading(t, "Pull requests"))
       .child(this.chips(t, "Sections", null, [["pr.sections.description", "Description"], ["pr.sections.people", "People"], ["pr.sections.checks", "Checks"],
@@ -212,6 +240,7 @@ export default class Settings extends View {
       .child(this.heading(t, "Claude Code"))
       .child(this.toggle(t, "context.enabled", "Show context on tabs", "How full each Claude Code conversation's context window is, from its status line. Idle ones show dimmed."))
       .child(this.stepper(t, "context.warnAt", "Warn from", "The figure turns red at this much used", { min: 50, max: 100, step: 5, unit: "%", disabled: off }))
+      .child(this.toggle(t, "context.spaces", "Show context on spaces", "Each space in the sidebar shows its fullest Claude Code context, every tab in the tooltip", off))
       .child(this.text(t, "context.cacheRoots", "Snapshot folders", "Where your status line writes claude-statusline.json, comma separated", off));
   }
 
@@ -276,6 +305,7 @@ export default class Settings extends View {
       .child(div().flex_1())
       .child(v_flex().gap(6).px(4)
         .child(this.button(t, "set-file", "Open sab.json", () => this.openFile()))
+        .child(this.button(t, "set-export", "Export settings…", () => this.exportSettings()))
         .child(div().id("set-reset").px(12).py(5).rounded(7).cursor_pointer().text_size(13)
           .text_color(armed ? t.ansi1 : t.muted).hover((s) => s.bg(t.hover))
           .on_click((_e, cx) => {

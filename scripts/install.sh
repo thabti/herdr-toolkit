@@ -8,7 +8,7 @@ set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
 src="$here/sab"
 dest="${HERDR_APP_HOME:-$HOME/.config/herdr-app}"
-mods="sab-tabs sab-panel sab-open-with sab-settings sab-chrome"
+mods="sab-tabs sab-panel sab-open-with sab-settings sab-chrome sab-spaces"
 mode=install
 case "${1:-}" in
   --dry-run) mode=dry ;;

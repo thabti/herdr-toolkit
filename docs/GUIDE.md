@@ -40,7 +40,7 @@ herdr-app do layout.switch --name sab
 The installer:
 
 - copies `sab/layouts/sab.json` to `~/.config/herdr-app/layouts/`;
-- copies the mods `sab-tabs`, `sab-panel`, `sab-open-with`, `sab-settings` and `sab-chrome` to `~/.config/herdr-app/mods/`;
+- copies the mods `sab-tabs`, `sab-panel`, `sab-open-with`, `sab-settings`, `sab-chrome` and `sab-spaces` to `~/.config/herdr-app/mods/`;
 - adds four keys to the `layout:sab` section of `keys.json`;
 - runs `herdr-app check` on each mod.
 
@@ -50,7 +50,7 @@ It refuses to overwrite a mod or layout of the same name that it didn't install.
 
 **Switch back.** Press `ctrl-shift-l`, or pick another layout in Herdr's Settings → Look.
 
-**Remove.** `scripts/install.sh --remove` deletes the layout, the five mods and the four keys. Your settings file `~/.config/herdr-app/sab.json` stays; delete it by hand if you like.
+**Remove.** `scripts/install.sh --remove` deletes the layout, the six mods and the four keys. Your settings file `~/.config/herdr-app/sab.json` stays; delete it by hand if you like.
 
 `HERDR_APP_HOME=/path scripts/install.sh` installs into another Herdr home.
 
@@ -91,13 +91,33 @@ Tab bar, left to right:
 
 The sidebar footer gains **herdr-toolkit settings** under Herdr's **Settings**.
 
+### Spaces and worktrees
+
+The spaces list is Herdr's own. Turn on settings → Panels → **Worktrees under their space** (off by default) to add worktrees, the space menu below and repository pins:
+
+- **Every worktree shows under its space.** A space stands for the repository its first terminal is in, or the one you pin. Spaces open on its other worktrees nest under it, as in Herdr. After them come the worktrees no space is open on (`git worktree list`), dimmed. Click one to open a space on it.
+- **Start with a terminal or an agent.** Opening a worktree, and **New worktree…**, first ask what the new space starts: **Terminal** or any installed agent (Claude Code, Codex…). Your last choice is preselected, so Enter repeats it; `T` picks Terminal and `1`–`9` an agent.
+- **Right-click a space:**
+  - **Rename** opens with the space's current name filled in and selected. Type over it, or clear it to go back to the automatic name.
+  - **New worktree…** opens Herdr's worktree dialog on that repository. A branch that exists is checked out; a new one starts from the current commit. The checkout goes in `~/.herdr/worktrees/<repo>/<branch>` and opens in a new space.
+  - **Open worktree…** lists every checkout of the repository, to switch to or open.
+  - **Remove this worktree…** (on a space open on a worktree) closes the space and deletes the checkout, after warning about uncommitted changes and submodules. Tick **Also delete the branch** to run `git branch -d` too (only a merged branch goes).
+  - **Set repository…** pins the repository the space stands for. Use it when the space's terminal sits in a folder that isn't a repository, such as `~`. Pick one that's open in a pane, type a path, or **Choose folder…**. **Unpin repository** undoes it. With no repository yet, **New worktree…** asks for one first.
+- **Right-click a dimmed worktree** for **Open in a new space…** or **Remove worktree…**.
+
+A pinned space also points the side panel, Finder and Editor at its repository while its pane sits in `~` (or any folder that holds the repository). `cd` into a worktree or another repository and they follow the pane again.
+
+**Context and tickets in the list** (each off by default). With settings → Claude context → **Show context on spaces** on, a space with Claude Code tabs shows its fullest context window, such as `62%`, at the end of its row, red from the warning level and dimmed when every one is idle; the tooltip lists each tab. A space or worktree whose branch (or name) carries a Jira key shows the ticket's title in place of the branch, once [titles](#ticket-titles) are set up.
+
+Pins live in `sab.json` as `spaces.repos` (space id → repository) and go when their space or worktree does. Only spaces on this computer can be pinned. With **Worktrees under their space** off, right-click shows Herdr's own space menu; pins you already set still apply.
+
 ---
 
 ## 3. The side panel
 
 Click a panel button to show it, and click it again to close it. The panel is 420 px wide; drag its left edge to resize it (300–900 px). **Each space remembers its own panel**: switching spaces brings back the one that space had open, or none.
 
-**Every panel follows the focused pane's folder.** Click into a pane in another repository and the panel switches to it. That is what makes GitHub per session.
+**Every panel follows the focused pane's folder.** Click into a pane in another repository and the panel switches to it. That is what makes GitHub per session. In a space pinned to a repository ([Spaces and worktrees](#spaces-and-worktrees)), a pane sitting in a folder that holds it, such as `~`, counts as being in the repository. The Finder and Editor buttons follow the same rule.
 
 A hidden panel does no work: it doesn't run git or `gh` and catches up when you show it again.
 
@@ -175,6 +195,16 @@ Off by default: turn it on in settings → Panels.
 - The filter box matches title, number, label or author.
 - ↗ at the top opens the repository's issues page.
 
+### Memory
+
+Off by default: turn it on in settings → Panels. What Claude Code loads as context for the focused pane's folder, with each file's size in approximate tokens (characters ÷ 4):
+
+- **Project instructions**, loaded every session: `CLAUDE.md`, `.claude/CLAUDE.md` and `CLAUDE.local.md` in the folder and every parent, and the repository's `.claude/rules/*.md`.
+- **Your instructions**, loaded in every project: `~/.claude/CLAUDE.md` and `~/.claude/rules/*.md`.
+- **Auto memory**: `~/.claude/projects/<project>/memory`. `MEMORY.md`, the index, is loaded every session; each memory file below it (with its type and description) only when Claude recalls it. A worktree shares its main checkout's memory, so the panel shows that one.
+
+The header totals what is loaded every session. Click a file to read it; ↗ opens it in an editor. The list follows changes to the memory folder as Claude writes them. This computer only.
+
 ### Preview
 
 One file, rendered: Markdown is drawn, anything else shown as read-only code. It reloads whenever the file changes, so you can watch an agent write a plan or a doc. Open it from **Open with → Preview in the panel**, on any text file.
@@ -191,7 +221,7 @@ A tab **you haven't named** is named by the first rule that matches:
 2. **The agent's own title.** Claude Code titles its terminal with the conversation's name. The status glyph in front (`✳`, braille spinners) is dropped, and generic titles like "Claude Code", shell names or paths are ignored.
 3. **The program's name**, e.g. "zsh" or "Claude Code".
 
-Hover a tab to see the full name, such as `WEB-142 · Fix the login redirect`.
+Hover a tab to see the full name, such as `WEB-142 · Fix the login redirect`. With [ticket titles](#ticket-titles) on, the key's tab reads `DS-1234 · Fix cart login` and the tooltip carries the title even on a tab you named.
 
 **A name you type always wins.** Double-click the tab or press `F2`. To go back to the automatic name, rename the tab to nothing.
 
@@ -207,6 +237,20 @@ Settings: turn automatic names off, or choose the sources (Jira keys, GitHub num
 - **Pull requests**: chips for keys in the title or branch, in the header and on each row of the open list; keys in the description become links; chips under comments and review threads that mention one.
 - **Issues**: chips for keys in an issue's title.
 - **Markdown** in Files and Preview: keys become links.
+
+### Ticket titles
+
+Off by default. With a Jira site set and settings → Tab bar → **Ticket titles** on, herdr-toolkit can fetch each ticket's title for tab names, tab tooltips and the spaces list. It needs a login, kept in a netrc file that curl reads, so the token never appears in a process list:
+
+1. Create an API token at <https://id.atlassian.com/manage-profile/security/api-tokens>.
+2. Save it as `~/.config/herdr-app/jira.netrc` (or the path in settings → Tab bar → **Login file**) and make it private:
+
+   ```sh
+   printf 'machine your-site.atlassian.net login you@example.com password <API token>\n' > ~/.config/herdr-app/jira.netrc
+   chmod 600 ~/.config/herdr-app/jira.netrc
+   ```
+
+Titles are fetched with `curl` from `/rest/api/3/issue/KEY`, a few at a time, kept for 30 minutes (`jira.refreshMinutes`) and remembered across restarts. Without the file you get one notice and nothing is fetched; a refused login (401/403) says so once. Turn **Title in the tab's name** off to keep tabs short and have the title in the tooltip only.
 
 One pattern finds them all: two to ten capitals and digits starting with a letter, a dash, a number (`DS-1234`, `WEB2-7`). Lookalikes such as `UTF-8`, `SHA-256` or `ISO-8601` are skipped. For no false matches at all, list your projects in settings → Tab bar → **Projects** (`DS, WEB`): then only those count, and lowercase `ds-1234` in branch and folder names counts too.
 
@@ -240,6 +284,8 @@ If you already have a status line, add a `tee` of its input to that file. If you
 2. that pane is the only Claude Code pane in the reading's folder.
 
 Otherwise the tab shows nothing rather than guess. A conversation shows a figure only after its status line has run once while Herdr was open.
+
+**In the spaces list** each space shows the fullest of its tabs' readings ([Spaces and worktrees](#spaces-and-worktrees)). Turn it on in settings → Claude context → **Show context on spaces** (off by default).
 
 ---
 
@@ -331,16 +377,20 @@ It looks like Herdr's own Settings and saves as you click. There is no Save butt
 | | Use: Jira keys · GitHub #123 · Agent title | Jira and agent title on | chips |
 | | Jira site | none | e.g. `https://your-site.atlassian.net`; every DS-1234 shown links to `<site>/browse/DS-1234` |
 | | Projects | any | `DS, WEB`: only these keys count; lowercase in branches too |
+| | Ticket titles | off | needs the site and the login file |
+| | Login file | `~/.config/herdr-app/jira.netrc` | `machine <site> login <email> password <token>` |
+| | Title in the tab's name | on | off: title in the tooltip only |
 | | Open in Finder | on | the focused pane's folder |
 | | Open in editor | on | `⌘⇧O` works either way |
 | | Labels beside icons | on | Off: icons only |
-| **Panels** | Files · Changes · Pull requests · Issues | Issues off | chips; off: no button |
+| **Panels** | Files · Changes · Pull requests · Issues · Memory | Issues and Memory off | chips; off: no button |
 | | Commit from Changes | on | |
 | | Create PR from Changes | on | push + `gh pr create --fill` |
 | | Create pull requests as drafts | on | Changes and PR panels |
 | | Worktrees | on | a repository with linked worktrees shows one section per worktree |
 | | Repositories in subfolders | on | a folder that isn't a repository shows each one inside it |
 | | Look for them | 2 deep | 1 to 5 folders below the pane's folder |
+| | Worktrees under their space | off | also worktrees no space is open on; pins (`spaces.repos`) come from a space's right-click |
 | | Pull request sections | all on | Description · People · Checks · Threads · Comments · Agent · Files |
 | | Merge with | Repo default | Squash · Merge · Rebase |
 | | Actions on the open list | on | ↗, Review, Describe |
@@ -352,6 +402,7 @@ It looks like Herdr's own Settings and saves as you click. There is no Save butt
 | | Tasks | all on | Code review · Describe change · Explain · Address feedback · Resolve conflicts · Start on issue |
 | | Prompts | built-in | file only, see below |
 | **Claude context** | Show context on tabs | on | |
+| | Show context on spaces | off | the fullest per space in the sidebar |
 | | Warn from | 80% | 50–100 |
 | | Snapshot folders | `~/.harp`, herdr-agent-usage's | comma separated |
 | **gcloud** | Show gcloud login | on | |
@@ -359,7 +410,11 @@ It looks like Herdr's own Settings and saves as you click. There is no Save butt
 | | Catch an expired login | on | network: `print-access-token` |
 | | Login command | `auth login` | args after `gcloud` |
 
-Only in `sab.json` (fine as they are for most people): `pr.refreshSeconds` (60), `issues.refreshSeconds` (120), `gcloud.refreshMinutes` (2), `gcloud.tokenCheckMinutes` (10), `context.staleMinutes` (10), `github.accounts` (owner pins).
+Only in `sab.json` (fine as they are for most people): `pr.refreshSeconds` (60), `issues.refreshSeconds` (120), `gcloud.refreshMinutes` (2), `gcloud.tokenCheckMinutes` (10), `context.staleMinutes` (10), `jira.refreshMinutes` (30), `github.accounts` (owner pins).
+
+### Export
+
+**Export settings…** (bottom left of the settings window) asks for a folder and writes `herdr-toolkit-settings.json` there, then shows it in Finder. A file with that name already there is kept, and the new one gets the date and time in its name. It holds what you changed from the defaults, as `sab.json` does. To use it on another Mac, copy it over `~/.config/herdr-app/sab.json`. Repository pins (`spaces.repos`) refer to this computer's spaces, so they won't match there.
 
 ### The settings file
 
@@ -421,17 +476,20 @@ The project was called herdr-sab, and its internal names keep the `sab` prefix: 
 ```
 sab/
   layouts/sab.json        Herdr's main layout; tabs → sab-tabs, footer → sab-chrome,
-                          panel-body stack holds the five panels
+                          panel-body stack holds the six panels
   keys.json               layout:sab keys, merged by the installer
   shared/config.js        settings defaults + load/save; copied into each mod
+  shared/jira.js          Jira ticket titles (curl + netrc), shared "sab.jira.titles"
   mods/
     sab-tabs/             tab bar: names, context, gcloud, buttons; publishes sab.json
       context.js          status-line snapshot readings
-    sab-panel/            one mod, five panels chosen by props.panel
-      files.js changes.js pr.js issues.js preview.js lib.js icons/
+    sab-panel/            one mod, six panels chosen by props.panel
+      files.js changes.js pr.js issues.js memory.js preview.js lib.js icons/
     sab-open-with/        the editor picker
     sab-settings/         the settings window
     sab-chrome/           Herdr's sidebar footer + "herdr-toolkit settings"
+    sab-spaces/           Herdr's spaces list + worktrees, pinned repos, context %, ticket titles
+      list.js menus.js git.js   the list; its menus and dialogs (props.view); git helpers
 scripts/
   install.sh              install / --dry-run / --remove
   sync-shared.sh          copies sab/shared/*.js into the mods

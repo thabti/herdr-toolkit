@@ -6,9 +6,12 @@
 //   branch or folder carries (WEB-142, #123), else its agent's own title, else
 //   the program. A name you type (double-click, F2) always wins; an empty name
 //   brings the automatic one back. Nothing is written: the name is only drawn.
+//   With a Jira site and login (jira.js), a Jira key also shows its ticket's
+//   title: "DS-1234 · Fix cart login", in full in the tooltip.
 // - Claude Code's context: a Claude Code tab shows how full its context window
 //   is, from the status line snapshot (context.js). An idle agent keeps its last
-//   reading, dimmed, with its age in the tooltip.
+//   reading, dimmed, with its age in the tooltip. Readings are also published as
+//   shared "sab.context.panes" for the spaces sidebar.
 // - + opens the shipped new-menu.
 // - gcloud: who is logged in (dot: green yes, red no or expired), the project
 //   in the chip, account and project in the tooltip; the small button beside it
@@ -20,7 +23,8 @@ import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { spaces, panes, run, openOverlay, theme, window, layout, settings, exec, focused, nextCommand } from "herdr";
 import { ClaudeContext, cleanTitle } from "./context.js";
-import { cfg, readSettings, SHARED_KEY, jiraKey, jiraUrl } from "./config.js";
+import { cfg, readSettings, SHARED_KEY, CONTEXT_KEY, jiraKey, jiraUrl, withPin } from "./config.js";
+import { jiraTitle, fetchJiraTitles, loadJiraCache } from "./jira.js";
 import { shared, setShared, notify } from "herdr";
 
 const ICON = "mods/sab-panel/icons/";
@@ -29,6 +33,7 @@ const PANELS = [
   { id: "changes", label: "Changes", icon: "changes" },
   { id: "pr", label: "PR", icon: "pull-request" },
   { id: "issues", label: "Issues", icon: "issue" },
+  { id: "memory", label: "Memory", icon: "file-text" },
 ];
 // Panels switched on in settings; Preview always (it opens from Open with).
 const enabledPanels = () => [...PANELS.filter((p) => cfg().panels[p.id] !== false).map((p) => p.id), "preview"];
@@ -67,8 +72,11 @@ export function autoName(tab, tabPanes, o = cfg().tabs) {
   const key = issueKey(first?.branch, keys) ?? issueKey(folder, keys);
   const title = o.agentTitle ? cleanTitle(agent?.title ?? first?.title) : "";
   const usable = title && !GENERIC.test(title) && title !== first?.program?.name ? title : null;
-  const name = key ?? usable ?? first?.program?.name ?? "Terminal";
-  return { name, full: [key, usable].filter(Boolean).join(" · ") || name };
+  // A Jira key with its ticket's title, once fetched: "DS-1234 · Fix cart login".
+  const ticket = key && !key.startsWith("#") ? jiraTitle(key) : null;
+  const keyed = key && ticket && cfg().jira?.tabTitle ? `${key} · ${ticket}` : key;
+  const name = keyed ?? usable ?? first?.program?.name ?? "Terminal";
+  return { name, full: [key && ticket ? `${key} · ${ticket}` : key, usable].filter(Boolean).join("\n") || name, titled: Boolean(key && ticket && cfg().jira?.tabTitle) };
 }
 
 // The Jira ticket a tab is about: from its name, its branch or its folder.
@@ -92,9 +100,12 @@ export default class Tabs extends View {
 
     // Settings file and Claude Code context readings: every 3 s, redraw only on a change.
     this.ctx = new ClaudeContext();
+    loadJiraCache();
     const tick = (cx) => cx.spawn(async (cx) => {
       await this.syncSettings();
       if (cfg().context.enabled && await this.ctx.poll(cfg().context.cacheRoots)) cx.notify();
+      if (cfg().context.enabled) this.publishContext();
+      await this.jiraTick();
     });
     tick(cx);
     cx.timer.every(3000, tick);
@@ -139,6 +150,22 @@ export default class Tabs extends View {
     }
   }
 
+  // Every Claude Code pane's reading, as shared "sab.context.panes"
+  // ({ pane: { pct, at, size, model } }), for the spaces sidebar.
+  publishContext() {
+    const claude = panes().filter(isClaude), out = {};
+    for (const p of claude) {
+      const r = this.ctx.forPane(p, claude);
+      if (r) out[p.pane] = { pct: r.pct, at: r.at, size: r.size, model: r.model };
+    }
+    if (JSON.stringify(shared(CONTEXT_KEY) ?? {}) !== JSON.stringify(out)) setShared(CONTEXT_KEY, out);
+  }
+
+  // Jira titles asked for while drawing; redraws when some arrived.
+  async jiraTick() {
+    try { await fetchJiraTitles({ tell: true, persist: true }); } catch {}
+  }
+
   // ---- gcloud ----
 
   // Account and project from the active configuration; `token`: also ask for an
@@ -172,12 +199,13 @@ export default class Tabs extends View {
     });
   }
 
-  // The focused pane's folder and the machine it is on (null: this computer).
+  // The focused pane's folder and the machine it is on (null: this computer);
+  // the space's pinned repository while the pane sits in a folder that holds it.
   paneFolder(space, allPanes) {
     const f = focused(), pane = f?.pane ? allPanes.find((p) => p.pane === f.pane)
       : (f?.terminal && allPanes.find((p) => p.terminal === f.terminal)) || allPanes.find((p) => p.focused);
     const on = f?.pane === null ? (f.terminal?.includes("/") ? f.terminal.split("/")[0] : null) : space?.machine ?? null;
-    return { cwd: pane?.cwd || f?.cwd || space?.folder || null, on, branch: pane?.branch || null };
+    return { cwd: withPin(pane?.cwd || f?.cwd || space?.folder || null, space) || null, on, branch: pane?.branch || null };
   }
 
   // Opens the focused tab's Jira ticket (cmd-alt-j).
@@ -284,13 +312,14 @@ export default class Tabs extends View {
     const item = (c, i) => {
       const tabPanes = allPanes.filter((p) => p.tab === c.id);
       const program = tabPanes.find((p) => p.program?.agent)?.program ?? tabPanes[0]?.program;
-      const { name, full } = autoName(c, tabPanes);
+      const { name, full, titled } = autoName(c, tabPanes);
       const jira = jiraUrl(tabJira(c, tabPanes)), jk = jira ? tabJira(c, tabPanes) : null;
+      const jt = jk ? jiraTitle(jk) : null;
       const working = c.status === "working";
       return h_flex().id(`tab-${c.id}`).h(29).px(10).gap(7).rounded(7).items_center().flex_none().text_size(12.8)
         .border(1).border_color(c.active ? t.border : t.chrome).bg(c.active ? t.raised : t.chrome).text_color(c.active ? t.foreground : t.muted)
         .hover((s) => s.bg(t.hover))
-        .tooltip([full, c.named ? null : "Double-click to name it", jk ? `${jk} in Jira: ⌘⌥J` : null].filter(Boolean).join("\n"))
+        .tooltip([full, jt && !full.includes(jt) ? `${jk} · ${jt}` : null, c.named ? null : "Double-click to name it", jk ? `${jk} in Jira: ⌘⌥J` : null].filter(Boolean).join("\n"))
         .on_mouse_down("left", (e, cx) => { cx.stop_propagation(); this.pressed = i; if (e.click_count === 2) run("tab.rename", { id: c.id }); })
         .on_mouse_up("left", () => {
           const from = this.pressed; this.pressed = null;
@@ -299,7 +328,7 @@ export default class Tabs extends View {
         })
         .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openOverlay({ mod: "menu", kind: "popup", width: 200, props: { tab: "tab", target: { id: c.id, space: space.id } } }); })
         .when(Boolean(program?.icon), (el) => el.child(program.tint ? svg(program.icon).size(14).text_color(t.muted) : image(program.icon).size(14)))
-        .child(div().max_w(190).truncate().child(c.zoomed ? `${name} Z` : name))
+        .child(div().max_w(titled ? 280 : 190).truncate().child(c.zoomed ? `${name} Z` : name))
         .when(working, (el) => el.child(div().size(6).flex_none().rounded_full().bg(t.working).loop("opacity", { from: 0.3, to: 1, period: 1400 })))
         .when(c.status === "blocked" || c.status === "done", (el) => el.child(div().size(6).flex_none().rounded_full().bg(t[c.status])))
         .when(true, (el) => { const chip = this.contextChip(c, tabPanes, claudePanes, t); return chip ? el.child(chip) : el; })
