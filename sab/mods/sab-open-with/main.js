@@ -18,6 +18,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { exec, run, notify, theme, props, closeOverlay, focused, panes, spaces, home, appHome, shared, setShared, window as win } from "herdr";
+import { withPin } from "./config.js";
 
 // PowerShell also treats U+2018..U+201B as single-quote delimiters.
 // Double every delimiter so paths remain data inside -Command.
@@ -179,7 +180,8 @@ export default class OpenWith extends View {
     const f = focused();
     const space = spaces().find((s) => s.id === f?.space) ?? spaces().find((s) => s.active);
     const pane = panes().find((x) => x.focused);
-    const folder = f?.cwd || pane?.cwd || space?.folder || home();
+    // herdr-toolkit: a space pinned to a repository opens it while its pane is in a folder that holds it (~).
+    const folder = withPin(f?.cwd || pane?.cwd || space?.folder, space) || home();
     return { folder, machine: space?.machine ?? null };
   }
 

@@ -10,6 +10,8 @@ import { shared, setShared, appHome, readTextFile, writeTextFile } from "herdr";
 
 export const SETTINGS_FILE = () => `${appHome()}/sab.json`;
 export const SHARED_KEY = "sab.settings";
+// Claude Code context per pane, published by sab-tabs for the spaces sidebar.
+export const CONTEXT_KEY = "sab.context.panes";
 
 export const DEFAULTS = {
   tabs: {
@@ -26,6 +28,7 @@ export const DEFAULTS = {
     warnAt: 80,              // % used from which it turns red
     staleMinutes: 10,        // older readings are dimmed
     cacheRoots: ["~/.harp", "~/.local/state/herdr/plugins/herdr-agent-usage"],
+    spaces: false,           // each space in the sidebar shows its fullest Claude Code context
   },
   gcloud: {
     enabled: true,
@@ -38,8 +41,12 @@ export const DEFAULTS = {
   jira: {
     baseUrl: "",             // e.g. "https://your-site.atlassian.net": DS-1234 opens <baseUrl>/browse/DS-1234
     projects: [],            // e.g. ["DS", "WEB"]: only these keys count, and lowercase ds-1234 in branches too
+    titles: false,           // fetch each ticket's title (needs baseUrl and the netrc file below)
+    netrc: "~/.config/herdr-app/jira.netrc",  // "machine <site> login <email> password <API token>"
+    tabTitle: true,          // an unnamed tab reads "DS-1234 · title", not just the key
+    refreshMinutes: 30,      // read a title again after this long
   },
-  panels: { files: true, changes: true, pr: true, issues: false },
+  panels: { files: true, changes: true, pr: true, issues: false, memory: false },  // memory: CLAUDE.md, rules and auto memory
   github: {
     autoAccount: true,       // find the logged-in gh account that can see each repository
     accounts: {},            // pin by owner: { "my-org": "my-login" }
@@ -56,6 +63,11 @@ export const DEFAULTS = {
     sections: { description: true, people: true, checks: true, threads: true, comments: true, agent: true, files: true },
     tasks: { review: true, describe: true, explain: true, feedback: true, conflicts: true },
   },
+  spaces: {
+    worktrees: false,        // list every worktree of a space's repository under it, also those no space is open on;
+                             // with it off, the sidebar is Herdr's own spaces list and right-click menu
+    repos: {},               // pins: { "<space id>": "/path/to/repo" }; set from a space's right-click → Set repository…
+  },
   issues: { limit: 100, refreshSeconds: 120, startButton: true },
   changes: {
     commit: true,
@@ -70,6 +82,23 @@ export const DEFAULTS = {
   // conflicts, issue.
   prompts: {},
 };
+
+// ---- Pinned repositories ----------------------------------------------------------
+
+// The repository a space is pinned to (spaces.repos, set from its right-click in
+// the spaces sidebar), or null. Pins come from the local folder picker, so only
+// spaces on this computer have one.
+export const pinOf = (s) => (s && !s.machine && cfg().spaces?.repos?.[s.id]) || null;
+
+// The folder that stands for a pane in a space: the pinned repository when the
+// pane's folder holds it (a shell in ~) or there is none, else the pane's own.
+// A pane that cd's elsewhere (a worktree, another repository) keeps its folder.
+export function withPin(cwd, space) {
+  const pin = pinOf(space);
+  if (!pin) return cwd;
+  const dir = String(cwd ?? "").replace(/\/+$/, "");
+  return !dir || pin === dir || pin.startsWith(dir + "/") ? pin : cwd;
+}
 
 // ---- Jira keys -------------------------------------------------------------------
 

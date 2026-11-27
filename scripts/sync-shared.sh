@@ -3,7 +3,7 @@
 # each other's files). Run after editing sab/shared/; install.sh runs it too.
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
-for m in sab-tabs sab-panel sab-settings; do
+for m in sab-tabs sab-panel sab-settings sab-spaces sab-open-with; do
   for f in "$root"/sab/shared/*.js; do
     cp "$f" "$root/sab/mods/$m/$(basename "$f")"
   done

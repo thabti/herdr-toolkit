@@ -64,6 +64,7 @@ right. It follows the pane you're in, so each session sees its own repository.
 | **Changes** | The working tree's changes, with diffs and Commit. Its tab bar button shows the current branch. |
 | **PR** | Every open pull request, with labels, comments, checks, unresolved threads, reviewers, files and diffs, and merge. |
 | **Issues** (off by default) | The repository's open GitHub issues, grouped and filterable. |
+| **Memory** (off by default) | What Claude Code loads for the pane's project (CLAUDE.md files, rules, auto memory), with token sizes. |
 
 - **Hand work to your agent.** From a pull request, one click starts a **Code review**,
   **Describe change**, **Explain**, **Address feedback** or **Resolve conflicts** task in a new
@@ -82,8 +83,20 @@ right. It follows the pane you're in, so each session sees its own repository.
   or its agent's own title. A name you type always wins.
 - **Claude Code context %** on each Claude tab, from its status line. An idle agent keeps its last
   reading, dimmed, with its age in the tooltip.
+- **Jira ticket titles** (off by default; needs an API token in a netrc file): `DS-1234 · Fix cart
+  login` on tabs and in tooltips, and on spaces and worktrees in the sidebar.
 - **gcloud login at a glance.** A chip shows whether you're logged in and to which project. A
   small button runs `gcloud auth login`.
+
+### A spaces sidebar that knows your worktrees
+
+- **Worktrees under their space** (off by default). Every worktree of a space's repository shows
+  under it, even with no space open on it. Click one to open it with a terminal or any installed
+  agent. Right-click a space for **New worktree**, **Open worktree** and **Remove worktree**, or to
+  pin the repository it stands for when its terminal isn't in one.
+- **Claude Code context on spaces** (off by default): the fullest context on each space.
+
+With these off, the sidebar is Herdr's own spaces list.
 
 ### Shortcuts out of Herdr
 
